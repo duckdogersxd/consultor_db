@@ -22,26 +22,30 @@ with st.sidebar:
     st.markdown("[Obter chave aqui](https://aistudio.google.com/app/apikey)")
     st.divider()
     st.info("A chave é usada apenas nesta sessão e não fica salva.")
-    
-# --- Cache de Recursos (Para não recarregar o banco a cada clique) ---
+
+
+# --- Lógica de Carregamento (Só roda se tiver a chave) ---
 @st.cache_resource
-def load_db_assistant():
-    if not os.getenv("GOOGLE_API_KEY"):
-        st.error("ERRO: Configure a GOOGLE_API_KEY no arquivo .env")
-        return None
+def load_db_assistant(google_api_key):
+    # Configura a variável de ambiente temporariamente para o LangChain
+    os.environ["GOOGLE_API_KEY"] = google_api_key
 
-    # Verifica se o banco existe
+    # Verifica se o banco existe (O banco deve subir junto com o código)
     if not os.path.exists("./chroma_db"):
-        st.error("ERRO: Banco de dados não encontrado. Rode 'python ingest.py' primeiro.")
+        st.error("ERRO CRÍTICO: A pasta 'chroma_db' não foi encontrada. Certifique-se de ter subido ela para o GitHub.")
         return None
 
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-    vectorstore = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
-    
-    # Modelo Gemini 1.5 Flash (Estável e com boa cota)
-    llm = ChatGoogleGenerativeAI(model="models/gemini-2.5-flash", temperature=0.2)
-    
-    return {"llm": llm, "retriever": vectorstore.as_retriever()}
+    try:
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+        vectorstore = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
+        
+        # Modelo Gemini 2.5 Flash
+        llm = ChatGoogleGenerativeAI(model="models/gemini-2.5-flash", temperature=0.2)
+        
+        return {"llm": llm, "retriever": vectorstore.as_retriever()}
+    except Exception as e:
+        st.error(f"Erro ao conectar com o Google: {e}")
+        return None
 
 # --- Lógica do Chat (Backend) ---
 def get_response(user_input, resources, chat_history):
@@ -112,14 +116,14 @@ def render_mermaid(code):
 # --- Interface Principal ---
 def main():
     st.title("🤖 Consultor de Modelagem de Dados")
-    st.caption("Assistente Inteligente com RAG + Gemini 1.5")
+    st.caption("Assistente Inteligente com RAG + Gemini 2.5")
 
     # Inicializa sessão
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
     # Carrega o "cérebro"
-    resources = load_db_assistant()
+    resources = load_db_assistant(api_key)
     if not resources:
         return
 
